@@ -1,0 +1,375 @@
+<html>
+<head></head>
+<body>
+    <canvas width="800" height="400" id="draw"></canvas>
+	<div id="print"></div>
+    <script>
+    const canvas=document.getElementById("draw");
+	const cW=canvas.width;
+	const cH=canvas.height;
+    const ctx=canvas.getContext("2d");
+    ctx.lineWidth=3;
+    canvas.addEventListener("mousedown", initiateElement,false);
+    canvas.addEventListener("mouseup", fixBorder,false);
+    canvas.addEventListener("mousemove",moveElement,false);
+	let drawWhat="";
+	document.addEventListener('keydown', (event) => {
+		const key = event.key;
+		switch (key){
+		case "p":
+			drawWhat='switch';
+			break;
+		case "s":
+			drawWhat='section';
+			break;
+		default:
+			console.log(key);
+		
+		}
+	}
+	)
+
+	const arrondi = x=>Math.round(x/10)*10;
+    let sectionState="none";
+	let switchState="none";
+    class Dot{
+        constructor(x=0,y=0, name=""){
+            this.x=x;
+            this.y=y;
+			this.left=null;
+			this.right=null;
+			this.name=name;
+        }
+        draw (color='black') {
+            ctx.fillStyle=color;
+            ctx.fillRect(this.x-3,this.y-3,6,6);
+			ctx.font = '10px serif';
+			ctx.textAlign = 'center';
+			ctx.fillText(this.name, this.x, this.y-5);
+        }
+		copy(){return new Dot(this.x,this.y)}
+    }
+    //const O= new Dot();
+	let L=new Dot();
+    let R=new Dot();
+    class Section{
+        constructor(A,B, name=""){
+            this.left=A;
+            this.right=B;
+			this.name=name;
+        }
+        draw(color='black'){
+            ctx.beginPath();
+            ctx.lineWidth=3;
+            ctx.strokeStyle=color;
+            ctx.moveTo(this.left.x,this.left.y);
+            ctx.lineTo(this.right.x,this.right.y);
+            ctx.stroke();
+			ctx.font = '10px serif';
+			ctx.textAlign = 'center';
+			ctx.fillText(this.name, (this.left.x+this.right.x)/2, (this.left.y+this.right.y)/2-5);
+        }
+		copy(){
+			let A=this.left.copy();
+			let B=this.right.copy();
+			return new Section(A,B);
+		}
+    }
+	class Switch {
+		constructor (entry, exit1,exit2, name="", dir="LR"){
+			if (entry.x>exit1.x){dir="RL"}
+			this.entry = entry;
+			this.exit1 = exit1;
+			this.name=name;
+			//this.long1=Dot.distance(entry,exit1); // evidemment faux il faudra revoir
+			this.exit2 = exit2 ;
+			//this.long2=Dot.distance(entry,exit2);
+			this.status="blocked";//status is either "blocked" or "free"
+			this.dir=dir;
+		}
+		direction=1; // 0 = no direction set, 1 E->1, 2 E->2
+		draw(color='black'){
+			ctx.strokeStyle=color;
+			ctx.lineWidth = 3;
+			ctx.beginPath();
+			ctx.moveTo(this.entry.x,this.entry.y);
+			ctx.lineTo(this.exit1.x,this.exit1.y);
+			ctx.moveTo((this.entry.x+this.exit1.x)/2,(this.entry.y+this.exit1.y)/2);
+			ctx.lineTo(this.exit2.x,this.exit2.y);
+			ctx.stroke();
+			ctx.fillStyle=color;
+			ctx.beginPath();
+				ctx.moveTo(this.entry.x*0.25+this.exit1.x*0.75,this.entry.y*0.25+this.exit1.y*0.75);
+				ctx.lineTo((this.entry.x+this.exit1.x)/2,(this.entry.y+this.exit1.y)/2);
+				ctx.lineTo(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2);
+			ctx.fill();
+			ctx.font = '10px serif';
+			ctx.textAlign = 'center';
+			let o=0;
+			(this.exit2.y>this.exit1.y) ?  o=5:o=-12;
+			ctx.fillText(this.name, (this.entry.x+this.exit1.x)/2, (this.entry.y+this.exit1.y)/2-o);
+			ctx.fillStyle='white';
+			switch (this.direction){
+				case 1:
+					ctx.fillRect(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2 -3,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2-3,6,6);
+					break;
+				case 2:
+					ctx.fillRect(this.entry.x*0.25+this.exit1.x*0.75-3,this.entry.y*0.25+this.exit1.y*0.75-3,6,6);
+					break
+				case 0:
+					ctx.fillRect(this.entry.x*0.25+this.exit1.x*0.75-3,this.entry.y*0.25+this.exit1.y*0.75-3,6,6);
+					ctx.fillRect(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2-3,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2-3,6,6);
+			}
+		}
+	}
+    let S=new Section(L,R);
+	let Sw=new Switch(new Dot(30,30),new Dot(90,30),new Dot(90,50));
+	//Sw.draw();
+    let dots=[];
+    let sections=[];
+	let switches=[];
+	
+    function checkDot(x,y){
+        let l=dots.length;
+		let ind=-1;
+		for(let i=0;i<l;i++){
+			if (((dots[i].x-x)*(dots[i].x-x)+(dots[i].y-y)*(dots[i].y-y))< 4){
+				return dots[i];
+			}
+		}
+		let A= new Dot(x,y);
+		A.name=dots.length;
+		dots.push(A);
+		return dots[l];
+    }
+	
+    function draw(){
+        ctx.beginPath();
+        ctx.clearRect(0,0,cW,cH);
+        // draw grid
+        ctx.strokeStyle="lightblue";
+        ctx.lineWidth=1;
+		ctx.fillStyle="lightblue";
+        for (let i=0;i<=cW;i+=20){
+            if(i%100==0){
+				
+				ctx.fillRect(i-1,0,2,cH);
+			}
+			else{
+				ctx.moveTo(i,0);
+				ctx.lineTo(i,cH);
+			}
+        }
+        for (let i=0;i<=cH;i+=20){
+            if(i%100==0){ctx.fillRect(0,i-1,cW,2);}
+			else{
+				ctx.moveTo(0,i);
+				ctx.lineTo(cW,i);
+			}
+        }
+        ctx.stroke();
+        ctx.strokeStyle="black";
+        //let l=dots.length;
+        let l=dots.length;
+		for(let i=0;i<l;i++){
+			dots[i].draw();
+		}
+		l=sections.length;
+		for(let i=0;i<l;i++){
+			sections[i].draw();
+		}
+		l=switches.length;
+		for(let i=0;i<l;i++){
+			switches[i].draw();
+		}
+		if (drawWhat=="section"){S.draw();}
+		if (drawWhat=="switch"){Sw.draw();}
+
+    }
+    function moveElement(e){
+		if(drawWhat=='section'){
+			if (sectionState=="left"){
+				S.left.x=e.pageX-7;
+				S.left.y=e.pageY-7;
+				S.right.x=e.pageX-7+60;
+				S.right.y=e.pageY-7;
+				window.requestAnimationFrame(draw);
+			}
+			if (sectionState=="right"){
+				S.right.x=e.pageX-7;
+				S.right.y=e.pageY-7;
+				window.requestAnimationFrame(draw);
+			}
+		}
+		if (drawWhat=="switch"){
+			if(switchState=='entry'){
+				Sw.entry=new Dot(e.pageX-7,e.pageY-7);
+				Sw.exit1=new Dot(e.pageX+53,e.pageY-7);
+				Sw.exit2=new Dot(e.pageX+53,e.pageY+13);
+				window.requestAnimationFrame(draw);
+			}
+			if(switchState=='exit1'){
+				Sw.exit1=new Dot(e.pageX-7,e.pageY-7);
+				Sw.exit2=new Dot(e.pageX-7,e.pageY+13);
+				window.requestAnimationFrame(draw);
+			}
+			if(switchState=='exit2'){
+				Sw.exit2=new Dot(e.pageX-7,e.pageY-7);
+				window.requestAnimationFrame(draw);
+			}
+			
+		}
+
+    }
+    function initiateElement(e){
+        if (drawWhat=="section"){
+			if (sectionState=="none"){
+				let O=new Dot(0,0);
+				let P=new Dot(0,0);
+				S=new Section(O,P);
+				S.left.x=e.pageX-7;
+				S.left.y=e.pageY-7;
+				S.right.x=e.pageX-7+60;
+				S.right.y=e.pageY-7;
+				sectionState="left"
+				window.requestAnimationFrame(draw);
+			}
+			if (sectionState=="rightReady"){
+				S.right.x=e.pageX-7;
+				S.right.y=e.pageY-7;
+				window.requestAnimationFrame(draw);
+				sectionState="right"
+			}
+		}
+		if (drawWhat=="switch"){
+			if(switchState=="none"){
+				Sw.entry=new Dot(e.pageX-7,e.pageY-7);
+				Sw.exit1=new Dot(e.pageX+53,e.pageY-7);
+				Sw.exit2=new Dot(e.pageX+53,e.pageY+13);
+				switchState='entry';
+				window.requestAnimationFrame(draw);
+			}
+			if(switchState=="exit1ready"){
+				Sw.exit1=new Dot(e.pageX-7,e.pageY-7);
+				switchState='exit1';
+				window.requestAnimationFrame(draw);
+			}
+			if(switchState=="exit2ready"){
+				Sw.exit2=new Dot(e.pageX-7,e.pageY-7);
+				switchState='exit2';
+				window.requestAnimationFrame(draw);
+			}
+		}
+		
+    }
+    function fixBorder(e){
+		if (drawWhat=='section'){
+			if (sectionState=="left"){
+				S=new Section (checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7)),S.right);
+				sectionState="rightReady"
+			}
+			if (sectionState=="right"){
+				let l=sections.length;
+				let SS=new Section(S.left,checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7)));
+				sectionState="none";
+				if (SS.left.x<SS.right.x){
+					SS.left.right={elem: "section", number: l , side: "left"};
+					SS.right.left={elem: "section", number: l , side: "right"};;
+				}
+				else {
+					SS.left.left={elem: "section", number: l , side: "left"};
+					SS.right.right={elem: "section", number: l , side: "right"};
+				}
+				window.requestAnimationFrame(draw);
+				SS.name="S"+l
+				sections.push(SS);
+			}
+		}
+		if (drawWhat=="switch"){
+			if(switchState=="entry"){
+				Sw= new Switch(checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7)),Sw.exit1,Sw.exit2);
+				switchState="exit1ready";
+			}
+			if(switchState=="exit1"){
+				Sw= new Switch(Sw.entry,checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7)),Sw.exit2);
+				switchState="exit2ready";
+			}
+			if(switchState=="exit2"){
+				let I=checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7));
+				let SSw= new Switch(Sw.entry,Sw.exit1,I);
+				switchState="none";
+				let l=switches.length;
+				if(SSw.dir=="LR"){
+					SSw.entry.right={elem: "switch", number: l , side: "entry"};
+					SSw.exit1.left={elem: "switch", number: l , side: "exit1"};
+					SSw.exit2.left={elem: "switch", number: l , side: "exit2"};
+				}
+				if(SSw.dir=="RL"){
+					SSw.entry.left={elem: "switch", number: l , side: "entry"};
+					SSw.exit1.right={elem: "switch", number: l , side: "exit1"};
+					SSw.exit2.right={elem: "switch", number: l , side: "exit2"};
+				}
+				
+				SSw.name="Sw"+l;
+				window.requestAnimationFrame(draw);
+
+				switches.push(SSw);
+			}
+		}
+    }
+
+function saveNetwork(){
+	let l=dots.length;
+	let html="let dots=[];<br>";
+		for (let i=0;i<l;i++){
+			html+=`dots[${i}]=new Dot(${dots[i].x+','+dots[i].y}); dots[${i}].name=${dots[i].name}; dots[${i}].left=${JSON.stringify(dots[i].left)};dots[${i}].right=${JSON.stringify(dots[i].right)};<br>`;
+		}
+		// rebuild sections and check consistency
+	let sect=[];
+	let swi=[];
+	for (let i=0;i<l;i++){
+		if (dots[i].left==null){}
+		else if (dots[i].left.elem=="section"){
+			let n=dots[i].left.number;
+			if (sect[n]==undefined){sect[n]={};}
+			if (sect[n][dots[i].left.side]==undefined){sect[n][dots[i].left.side]=i}
+			else{alert("incoherence section left")}
+		}
+		else {
+			if (dots[i].left.elem!="switch"){alert('elementinconnu', dots[i].elem);break}
+			let n=dots[i].left.number;
+			if (swi[n]==undefined){swi[n]={};}
+			if (swi[n][dots[i].left.side]==undefined){swi[n][dots[i].left.side]=i}
+			else{alert("incoherence switch left")}
+		}
+		if (dots[i].right==null){}
+		else if (dots[i].right.elem=="section"){
+			let n=dots[i].right.number;
+			if (sect[n]==undefined){sect[n]={};}
+			if (sect[n][dots[i].right.side]==undefined){sect[n][dots[i].right.side]=i}
+			else{alert("incoherence section right")}
+		}
+		else {
+			if (dots[i].right.elem!="switch"){alert('elementinconnu', dots[i].elem);break}
+			let n=dots[i].right.number;
+			if (swi[n]==undefined){swi[n]={};}
+			if (swi[n][dots[i].right.side]==undefined){swi[n][dots[i].right.side]=i}
+			else{alert("incoherence switch left")}
+		}
+	}
+	l=sect.length;
+	html+='let sections=[]; <br>';
+	for (let i=0;i<l;i++){
+		html+=`sections[${i}]= new Section(dots[${sect[i].left+'], dots['+sect[i].right+'], S'+i}); <br>`
+	}
+	l=swi.length;
+	html+='let switches=[]; <br>';
+	for (let i=0;i<l;i++){
+		html+=`switches[${i}]= new Switch(dots[${swi[i].entry+'], dots['+swi[i].exit1+'], dots['+swi[i].exit2+'], Sw'+i}); <br>`
+	}
+	document.getElementById("print").innerHTML=html;
+}
+    
+    </script>
+</body>
+</html>
