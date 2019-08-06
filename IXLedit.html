@@ -320,7 +320,7 @@
 
 function saveNetwork(){
 	let l=dots.length;
-	let html="let dots=[];<br>";
+	let html="<br>";
 		for (let i=0;i<l;i++){
 			html+=`dots[${i}]=new Dot(${dots[i].x+','+dots[i].y}); dots[${i}].name=${dots[i].name}; dots[${i}].left=${JSON.stringify(dots[i].left)};dots[${i}].right=${JSON.stringify(dots[i].right)};<br>`;
 		}
@@ -358,18 +358,27 @@ function saveNetwork(){
 		}
 	}
 	l=sect.length;
-	html+='let sections=[]; <br>';
+	html+=' <br>';
 	for (let i=0;i<l;i++){
-		html+=`sections[${i}]= new Section(dots[${sect[i].left+'], dots['+sect[i].right+'], S'+i}); <br>`
+		html+=`sections[${i}]= new Section(dots[${sect[i].left+'], dots['+sect[i].right+'], "S'+i}"); <br>`
 	}
 	l=swi.length;
-	html+='let switches=[]; <br>';
+	html+=' <br>';
 	for (let i=0;i<l;i++){
-		html+=`switches[${i}]= new Switch(dots[${swi[i].entry+'], dots['+swi[i].exit1+'], dots['+swi[i].exit2+'], Sw'+i}); <br>`
+		html+=`switches[${i}]= new Switch(dots[${swi[i].entry+'], dots['+swi[i].exit1+'], dots['+swi[i].exit2+'], "Sw'+i}"); <br>`
 	}
 	document.getElementById("print").innerHTML=html;
 }
-    
+// je mets les data
+//let dots=[];
+dots[0]=new Dot(40,100); dots[0].name=0; dots[0].left=null;dots[0].right={"elem":"section","number":0,"side":"left"};
+dots[1]=new Dot(100,100); dots[1].name=1; dots[1].left={"elem":"section","number":0,"side":"right"};dots[1].right={"elem":"switch","number":0,"side":"entry"};
+dots[2]=new Dot(160,100); dots[2].name=2; dots[2].left={"elem":"switch","number":0,"side":"exit1"};dots[2].right=null;
+dots[3]=new Dot(160,120); dots[3].name=3; dots[3].left={"elem":"switch","number":0,"side":"exit2"};dots[3].right=null;
+//let sections=[]; 
+sections[0]= new Section(dots[0], dots[1], "S0"); 
+//let switches=[]; 
+switches[0]= new Switch(dots[1], dots[2], dots[3], "Sw0");      
     </script>
 </body>
 </html>
