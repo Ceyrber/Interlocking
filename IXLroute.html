@@ -8,19 +8,19 @@
 	const cW=canvas.width;
 	const cH=canvas.height;
     const ctx=canvas.getContext("2d");
+    let action="";
     ctx.lineWidth=3;
-    canvas.addEventListener("mousedown", initiateElement,false);
-    canvas.addEventListener("mouseup", fixBorder,false);
-    canvas.addEventListener("mousemove",moveElement,false);
-	let drawWhat="";
+    //canvas.addEventListener("mousedown", initiateElement,false);
+    canvas.addEventListener("mouseup", selectElem,false);
+    //canvas.addEventListener("mousemove",moveElement,false);
 	document.addEventListener('keydown', (event) => {
 		const key = event.key;
 		switch (key){
 		case "p":
-			drawWhat='switch';
+			//drawWhat='switch';
 			break;
 		case "s":
-			drawWhat='section';
+			action="select";
 			break;
 		default:
 			console.log(key);
@@ -30,8 +30,8 @@
 	)
 
 	const arrondi = x=>Math.round(x/10)*10;
-    let sectionState="none";
-	let switchState="none";
+    //let sectionState="none";
+	//let switchState="none";
     class Dot{
         constructor(x=0,y=0, name=""){
             this.x=x;
@@ -47,11 +47,11 @@
 			ctx.textAlign = 'center';
 			ctx.fillText(this.name, this.x, this.y-5);
         }
-		copy(){return new Dot(this.x,this.y)}
+        dist (mx,my){
+            return Math.sqrt((this.x-mx)**2+(this.y-my)**2);
+        }
     }
-    //const O= new Dot();
-	let L=new Dot();
-    let R=new Dot();
+    
     class Section{
         constructor(A,B, name=""){
             this.left=A;
@@ -69,11 +69,15 @@
 			ctx.textAlign = 'center';
 			ctx.fillText(this.name, (this.left.x+this.right.x)/2, (this.left.y+this.right.y)/2-5);
         }
-		copy(){
-			let A=this.left.copy();
-			let B=this.right.copy();
-			return new Section(A,B);
-		}
+		dist(mx,my){
+            let xa=this.left.x;
+            let xb=this.right.x;
+            let ya=this.left.y;
+            let yb=this.right.y;
+            let lambda=((xb-xa)*(mx-xa)+(yb-ya)*(my-ya))/((xb-xa)**2+(yb-ya)**2);
+            if (lambda<0 || lambda>1) {return 200;}
+            return Math.sqrt((mx-xa)**2+(my-ya)**2-(lambda**2)*((xb-xa)**2+(yb-ya)**2))
+        }
     }
 	class Switch {
 		constructor (entry, exit1,exit2, name="", dir="LR"){
@@ -87,7 +91,19 @@
 			this.status="blocked";//status is either "blocked" or "free"
 			this.dir=dir;
 		}
-		direction=1; // 0 = no direction set, 1 E->1, 2 E->2
+        direction=1; // 0 = no direction set, 1 E->1, 2 E->2
+        nextd(side){
+            switch (side){
+                case "entry":
+                    return ["exit1","exit2"];
+                case "exit1":
+                    return ["entry"];
+                case "exit2":
+                    return ["entry"];
+                default :
+                    alert ("pb in next");
+            }
+        }
 		draw(color='black'){
 			ctx.strokeStyle=color;
 			ctx.lineWidth = 3;
@@ -120,11 +136,19 @@
 					ctx.fillRect(this.entry.x*0.25+this.exit1.x*0.75-3,this.entry.y*0.25+this.exit1.y*0.75-3,6,6);
 					ctx.fillRect(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2-3,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2-3,6,6);
 			}
-		}
-	}
-    let S=new Section(L,R);
-	let Sw=new Switch(new Dot(30,30),new Dot(90,30),new Dot(90,50));
-	//Sw.draw();
+        }
+        dist(mx,my){
+            let xM=Math.max(this.entry.x,this.exit1.x,this.exit2.x);
+            let xm=Math.min(this.entry.x,this.exit1.x,this.exit2.x);
+            let yM=Math.max(this.entry.y,this.exit1.y,this.exit2.y);
+            let ym=Math.min(this.entry.y,this.exit1.y,this.exit2.y);
+            if ((mx<xm)||mx>xM){return 300;}
+            if ((my<ym)||my>yM){return 300;}
+            return 10;
+        }
+    }
+    
+
     let dots=[];
     let sections=[];
 	let switches=[];
@@ -182,193 +206,92 @@
 		for(let i=0;i<l;i++){
 			switches[i].draw();
 		}
-		if (drawWhat=="section"){S.draw();}
-		if (drawWhat=="switch"){Sw.draw();}
 
     }
-    function moveElement(e){
-		if(drawWhat=='section'){
-			if (sectionState=="left"){
-				S.left.x=e.pageX-7;
-				S.left.y=e.pageY-7;
-				S.right.x=e.pageX-7+60;
-				S.right.y=e.pageY-7;
-				window.requestAnimationFrame(draw);
-			}
-			if (sectionState=="right"){
-				S.right.x=e.pageX-7;
-				S.right.y=e.pageY-7;
-				window.requestAnimationFrame(draw);
-			}
-		}
-		if (drawWhat=="switch"){
-			if(switchState=='entry'){
-				Sw.entry=new Dot(e.pageX-7,e.pageY-7);
-				Sw.exit1=new Dot(e.pageX+53,e.pageY-7);
-				Sw.exit2=new Dot(e.pageX+53,e.pageY+13);
-				window.requestAnimationFrame(draw);
-			}
-			if(switchState=='exit1'){
-				Sw.exit1=new Dot(e.pageX-7,e.pageY-7);
-				Sw.exit2=new Dot(e.pageX-7,e.pageY+13);
-				window.requestAnimationFrame(draw);
-			}
-			if(switchState=='exit2'){
-				Sw.exit2=new Dot(e.pageX-7,e.pageY-7);
-				window.requestAnimationFrame(draw);
-			}
-			
-		}
-
+    function selectElem(e){
+        let x=e.pageX-7;
+        let y=e.pageY-7;
+        let choix="dot";
+        let ind=400;
+        let l=dots.length;
+        let min=300;
+        for (let i=0;i<l;i++){
+            let d=dots[i].dist(x,y);
+            if (d<min){
+                min=d;
+                ind=i;
+            }
+        }
+        console.log("point le plus pres: ",ind," à dist: ",min );
+        choix="section";
+        ind=400;
+        l=sections.length;
+        min=300;
+        for (let i=0;i<l;i++){
+            let d=sections[i].dist(x,y);
+            if (d<min){
+                min=d;
+                ind=i;
+            }
+        }
+        console.log("sections la plus pres: ",ind," à dist: ",min );
+        choix="switch";
+        ind=200;
+        l=switches.length;
+        min=300;
+        for (let i=0;i<l;i++){
+            let d=switches[i].dist(x,y);
+            if (d<min){
+                min=d;
+                ind=i;
+            }
+        }
+        console.log("switch le plus pres: ",ind," à dist: ",min );
     }
-    function initiateElement(e){
-        if (drawWhat=="section"){
-			if (sectionState=="none"){
-				let O=new Dot(0,0);
-				let P=new Dot(0,0);
-				S=new Section(O,P);
-				S.left.x=e.pageX-7;
-				S.left.y=e.pageY-7;
-				S.right.x=e.pageX-7+60;
-				S.right.y=e.pageY-7;
-				sectionState="left"
-				window.requestAnimationFrame(draw);
-			}
-			if (sectionState=="rightReady"){
-				S.right.x=e.pageX-7;
-				S.right.y=e.pageY-7;
-				window.requestAnimationFrame(draw);
-				sectionState="right"
-			}
-		}
-		if (drawWhat=="switch"){
-			if(switchState=="none"){
-				Sw.entry=new Dot(e.pageX-7,e.pageY-7);
-				Sw.exit1=new Dot(e.pageX+53,e.pageY-7);
-				Sw.exit2=new Dot(e.pageX+53,e.pageY+13);
-				switchState='entry';
-				window.requestAnimationFrame(draw);
-			}
-			if(switchState=="exit1ready"){
-				Sw.exit1=new Dot(e.pageX-7,e.pageY-7);
-				switchState='exit1';
-				window.requestAnimationFrame(draw);
-			}
-			if(switchState=="exit2ready"){
-				Sw.exit2=new Dot(e.pageX-7,e.pageY-7);
-				switchState='exit2';
-				window.requestAnimationFrame(draw);
-			}
-		}
-		
+function allRoutes(i,j){
+    let routes=[];
+    let route=[]
+    let dir="";
+    dots[i].x<dots[j].x ? dir="right": dir="left";
+    function invDir(x){
+        switch (x) {
+            case "left":
+                return "right";
+            case "right":
+                return "left";
+            default:
+                alert("connerie gauche droite");
+        }
     }
-    function fixBorder(e){
-		if (drawWhat=='section'){
-			if (sectionState=="left"){
-				S=new Section (checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7)),S.right);
-				sectionState="rightReady"
-			}
-			if (sectionState=="right"){
-				let l=sections.length;
-				let SS=new Section(S.left,checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7)));
-				sectionState="none";
-				if (SS.left.x<SS.right.x){
-					SS.left.right={elem: "section", number: l , side: "left"};
-					SS.right.left={elem: "section", number: l , side: "right"};;
-				}
-				else {
-					SS.left.left={elem: "section", number: l , side: "left"};
-					SS.right.right={elem: "section", number: l , side: "right"};
-				}
-				window.requestAnimationFrame(draw);
-				SS.name="S"+l
-				sections.push(SS);
-			}
-		}
-		if (drawWhat=="switch"){
-			if(switchState=="entry"){
-				Sw= new Switch(checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7)),Sw.exit1,Sw.exit2);
-				switchState="exit1ready";
-			}
-			if(switchState=="exit1"){
-				Sw= new Switch(Sw.entry,checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7)),Sw.exit2);
-				switchState="exit2ready";
-			}
-			if(switchState=="exit2"){
-				let I=checkDot(arrondi(e.pageX-7),arrondi(e.pageY-7));
-				let SSw= new Switch(Sw.entry,Sw.exit1,I);
-				switchState="none";
-				let l=switches.length;
-				if(SSw.dir=="LR"){
-					SSw.entry.right={elem: "switch", number: l , side: "entry"};
-					SSw.exit1.left={elem: "switch", number: l , side: "exit1"};
-					SSw.exit2.left={elem: "switch", number: l , side: "exit2"};
-				}
-				if(SSw.dir=="RL"){
-					SSw.entry.left={elem: "switch", number: l , side: "entry"};
-					SSw.exit1.right={elem: "switch", number: l , side: "exit1"};
-					SSw.exit2.right={elem: "switch", number: l , side: "exit2"};
-				}
-				
-				SSw.name="Sw"+l;
-				window.requestAnimationFrame(draw);
-
-				switches.push(SSw);
-			}
-		}
+    function findRoutes(i,j){
+        let current=i;
+        let l=route.length;
+        while ((dots[current][dir].elem=="section")&&(current!=j)){
+                let s=sections[dots[current][dir].number];
+                let side=dots[current][dir].side;
+                (side==dir)? dir=invDir(dir):dir=dir;
+                current=s[dir].name;
+                route.push(s.name);
+                if (dots[current][dir]==null){route.length=l;return}
+        }
+        if (current===j){routes.push(route.map(x=>x)); route.length=l;return}
+        if (dots[current][dir].elem=="switch"){
+            let s=switches[dots[current][dir].number];
+            let suite=s.nextd(dots[current][dir].side);
+            route.push(s.name)
+            for (let i=0;i<suite.length;i++){
+                (s[suite[i]][invDir(dir)].number!=switches.indexOf(s))? dir=invDir(dir):dir=dir;
+                current=s[suite[i]].name;
+                findRoutes(current,j);
+            }
+            route.length=l;
+            return
+        }
     }
-
-function saveNetwork(){
-	let l=dots.length;
-	let html="<br>";
-		for (let i=0;i<l;i++){
-			html+=`dots[${i}]=new Dot(${dots[i].x+','+dots[i].y}); dots[${i}].name=${dots[i].name}; dots[${i}].left=${JSON.stringify(dots[i].left)};dots[${i}].right=${JSON.stringify(dots[i].right)};<br>`;
-		}
-		// rebuild sections and check consistency
-	let sect=[];
-	let swi=[];
-	for (let i=0;i<l;i++){
-		if (dots[i].left==null){}
-		else if (dots[i].left.elem=="section"){
-			let n=dots[i].left.number;
-			if (sect[n]==undefined){sect[n]={};}
-			if (sect[n][dots[i].left.side]==undefined){sect[n][dots[i].left.side]=i}
-			else{alert("incoherence section left")}
-		}
-		else {
-			if (dots[i].left.elem!="switch"){alert('elementinconnu', dots[i].elem);break}
-			let n=dots[i].left.number;
-			if (swi[n]==undefined){swi[n]={};}
-			if (swi[n][dots[i].left.side]==undefined){swi[n][dots[i].left.side]=i}
-			else{alert("incoherence switch left")}
-		}
-		if (dots[i].right==null){}
-		else if (dots[i].right.elem=="section"){
-			let n=dots[i].right.number;
-			if (sect[n]==undefined){sect[n]={};}
-			if (sect[n][dots[i].right.side]==undefined){sect[n][dots[i].right.side]=i}
-			else{alert("incoherence section right")}
-		}
-		else {
-			if (dots[i].right.elem!="switch"){alert('elementinconnu', dots[i].elem);break}
-			let n=dots[i].right.number;
-			if (swi[n]==undefined){swi[n]={};}
-			if (swi[n][dots[i].right.side]==undefined){swi[n][dots[i].right.side]=i}
-			else{alert("incoherence switch left")}
-		}
-	}
-	l=sect.length;
-	html+=' <br>';
-	for (let i=0;i<l;i++){
-		html+=`sections[${i}]= new Section(dots[${sect[i].left+'], dots['+sect[i].right+'], "S'+i}"); <br>`
-	}
-	l=swi.length;
-	html+=' <br>';
-	for (let i=0;i<l;i++){
-		html+=`switches[${i}]= new Switch(dots[${swi[i].entry+'], dots['+swi[i].exit1+'], dots['+swi[i].exit2+'], "Sw'+i}"); <br>`
-	}
-	document.getElementById("print").innerHTML=html;
-}
+    findRoutes(i,j);
+    console.log(routes);
+    return routes;
+}    
 // je mets les data
 //let dots=[];
 dots[0]=new Dot(20,160); dots[0].name=0; dots[0].left=null;dots[0].right={"elem":"section","number":0,"side":"left"};
@@ -432,7 +355,8 @@ switches[4]= new Switch(dots[17], dots[18], dots[16], "Sw4");
 switches[5]= new Switch(dots[17], dots[19], dots[20], "Sw5"); 
 switches[6]= new Switch(dots[21], dots[22], dots[20], "Sw6"); 
 switches[7]= new Switch(dots[23], dots[24], dots[25], "Sw7"); 
-switches[8]= new Switch(dots[26], dots[10], dots[25], "Sw8");      
+switches[8]= new Switch(dots[26], dots[10], dots[25], "Sw8");
+draw();     
     </script>
 </body>
 </html>
