@@ -8,12 +8,19 @@
 	const cW=canvas.width;
 	const cH=canvas.height;
     const ctx=canvas.getContext("2d");
-    let action="";
+    const instruction=document.getElementById("print");
+    let action=selectElemAndDo;
     ctx.lineWidth=3;
     //canvas.addEventListener("mousedown", initiateElement,false);
-    canvas.addEventListener("mouseup", selectElem,false);
+    canvas.addEventListener("mouseup", selectAction,false);
     //canvas.addEventListener("mousemove",moveElement,false);
-	document.addEventListener('keydown', (event) => {
+    const param=[];
+	function selectAction(e){
+        let x=e.pageX-7;
+        let y=e.pageY-7;
+        action(x,y,param);
+    }
+    document.addEventListener('keydown', (event) => {
 		const key = event.key;
 		switch (key){
 		case "p":
@@ -32,6 +39,7 @@
 	const arrondi = x=>Math.round(x/10)*10;
     //let sectionState="none";
 	//let switchState="none";
+    const supervisedRoutes=[];
     class Dot{
         constructor(x=0,y=0, name=""){
             this.x=x;
@@ -62,6 +70,7 @@
             ctx.beginPath();
             ctx.lineWidth=3;
             ctx.strokeStyle=color;
+            ctx.fillStyle=color;
             ctx.moveTo(this.left.x,this.left.y);
             ctx.lineTo(this.right.x,this.right.y);
             ctx.stroke();
@@ -119,6 +128,7 @@
 				ctx.lineTo((this.entry.x+this.exit1.x)/2,(this.entry.y+this.exit1.y)/2);
 				ctx.lineTo(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2);
 			ctx.fill();
+            ctx.fillStyle=color;
 			ctx.font = '10px serif';
 			ctx.textAlign = 'center';
 			let o=0;
@@ -206,11 +216,21 @@
 		for(let i=0;i<l;i++){
 			switches[i].draw();
 		}
+        l=supervisedRoutes.length;
+        for (let i=0;i<l;i++){
+            let ll=supervisedRoutes[i].length;
+            for (let j=0;j<ll;j++){
+                supervisedRoutes[i][j].elem.draw('blue');
+            }
+        }
 
     }
-    function selectElem(e){
-        let x=e.pageX-7;
-        let y=e.pageY-7;
+    function selectElemAndDo(x,y){
+        let el=selectElem(x,y)
+        console.log("j'ai", el);
+    }
+    function selectElem(x,y){
+        
         let choix="dot";
         let ind=400;
         let l=dots.length;
@@ -223,6 +243,7 @@
             }
         }
         console.log("point le plus pres: ",ind," à dist: ",min );
+        if (min<5){return dots[ind];}
         choix="section";
         ind=400;
         l=sections.length;
@@ -235,6 +256,7 @@
             }
         }
         console.log("sections la plus pres: ",ind," à dist: ",min );
+        if (min<8){return sections[ind]}
         choix="switch";
         ind=200;
         l=switches.length;
@@ -247,6 +269,8 @@
             }
         }
         console.log("switch le plus pres: ",ind," à dist: ",min );
+        if (min<11){return Sw[ind];}
+        return null;
     }
 function allRoutes(i,j){
     let routes=[];
@@ -270,28 +294,65 @@ function allRoutes(i,j){
                 let s=sections[dots[current][dir].number];
                 let side=dots[current][dir].side;
                 (side==dir)? dir=invDir(dir):dir=dir;
+                route.push({name: "dot", elem: dots[current], dir: dir});
                 current=s[dir].name;
-                route.push(s.name);
+                
+                route.push({name: "section", elem: s, dir: (side=="left" ? " L->R": " R->L")});
                 if (dots[current][dir]==null){route.length=l;return}
         }
-        if (current===j){routes.push(route.map(x=>x)); route.length=l;return}
+        if (current===j){
+            route.push({name: "dot", elem: dots[current], dir: dir});
+            routes.push(route.map(x=>x)); route.length=l;return}
         if (dots[current][dir].elem=="switch"){
             let s=switches[dots[current][dir].number];
-            let suite=s.nextd(dots[current][dir].side);
-            route.push(s.name)
+            let side=dots[current][dir].side;
+            let suite=s.nextd(side);
+            route.push({name: "dot", elem: dots[current], dir: dir});
             for (let i=0;i<suite.length;i++){
                 (s[suite[i]][invDir(dir)].number!=switches.indexOf(s))? dir=invDir(dir):dir=dir;
                 current=s[suite[i]].name;
+                route.push({name: "switch", elem: s, dir: side+"->"+suite[i]});
                 findRoutes(current,j);
+                route.pop();
             }
             route.length=l;
             return
         }
     }
     findRoutes(i,j);
-    console.log(routes);
+    let l=routes.length;
+    if (l==1){supervisedRoutes.push(routes[0]);draw()}
+    if (l>1){
+        
+        for (let i=0;i<l;i++){
+            let ll=routes[i].length;
+            ctx.save();
+            ctx.translate(i*cW/l, 300);
+            ctx.scale(1/l,1/4);
+            draw();
+            for (let j=0;j<ll;j++){
+                routes[i][j].elem.draw('red');
+            }
+            ctx.restore()
+        }
+        instruction.innerHTML=`choose one of the ${l} routes`;
+        action=chooseRoute;
+        param[0]=routes;
+    }
+    if (l==0){alert('no available route at this time')}
     return routes;
-}    
+}
+
+function chooseRoute(x,y,r){
+    if (y<300){
+        alert ('select a route by clicking on it');
+        return;
+    }
+    let l=r[0].length;
+    supervisedRoutes.push(r[0][Math.floor(x/cW*l)]);
+    action=selectElemAndDo;
+    draw();
+}   
 // je mets les data
 //let dots=[];
 dots[0]=new Dot(20,160); dots[0].name=0; dots[0].left=null;dots[0].right={"elem":"section","number":0,"side":"left"};
