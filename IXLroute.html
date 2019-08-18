@@ -10,6 +10,7 @@
     const ctx=canvas.getContext("2d");
     const instruction=document.getElementById("print");
     let action=selectElemAndDo;
+    const rg=/exit\d/;
     ctx.lineWidth=3;
     //canvas.addEventListener("mousedown", initiateElement,false);
     canvas.addEventListener("mouseup", selectAction,false);
@@ -65,6 +66,8 @@
             this.left=A;
             this.right=B;
 			this.name=name;
+            this.booked=false
+            this.route=null
         }
         draw(color='black'){
             ctx.beginPath();
@@ -97,10 +100,11 @@
 			//this.long1=Dot.distance(entry,exit1); // evidemment faux il faudra revoir
 			this.exit2 = exit2 ;
 			//this.long2=Dot.distance(entry,exit2);
-			this.status="blocked";//status is either "blocked" or "free"
+			this.booked=false;
+            this.flankProtect=null;
 			this.dir=dir;
 		}
-        direction=1; // 0 = no direction set, 1 E->1, 2 E->2
+        direction="entry->exit1";
         nextd(side){
             switch (side){
                 case "entry":
@@ -113,6 +117,18 @@
                     alert ("pb in next");
             }
         }
+        move(dir,color){
+            if(rg.exec(dir)[0]==rg.exec(this.direction)[0]){return;}
+            this.direction="move";
+            this.draw("orange");
+            setTimeout(this.moveSimu,2000, dir, color);           
+        }
+        moveSimu=( function (dir,color){// a remplacer par un vrai simu de type worker
+            console.log(this,dir,color);
+            this.direction="entry->"+rg.exec(dir)[0];
+            this.draw(color)
+        }).bind(this);
+
 		draw(color='black'){
 			ctx.strokeStyle=color;
 			ctx.lineWidth = 3;
@@ -136,13 +152,13 @@
 			ctx.fillText(this.name, (this.entry.x+this.exit1.x)/2, (this.entry.y+this.exit1.y)/2-o);
 			ctx.fillStyle='white';
 			switch (this.direction){
-				case 1:
+				case "entry->exit1":
 					ctx.fillRect(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2 -3,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2-3,6,6);
 					break;
-				case 2:
+				case "entry->exit2":
 					ctx.fillRect(this.entry.x*0.25+this.exit1.x*0.75-3,this.entry.y*0.25+this.exit1.y*0.75-3,6,6);
 					break
-				case 0:
+				case "move":
 					ctx.fillRect(this.entry.x*0.25+this.exit1.x*0.75-3,this.entry.y*0.25+this.exit1.y*0.75-3,6,6);
 					ctx.fillRect(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2-3,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2-3,6,6);
 			}
@@ -296,7 +312,7 @@ function allRoutes(i,j){
                 (side==dir)? dir=invDir(dir):dir=dir;
                 route.push({name: "dot", elem: dots[current], dir: dir});
                 current=s[dir].name;
-                
+                if (s.booked){route.length=l;return;}
                 route.push({name: "section", elem: s, dir: (side=="left" ? " L->R": " R->L")});
                 if (dots[current][dir]==null){route.length=l;return}
         }
@@ -305,13 +321,17 @@ function allRoutes(i,j){
             routes.push(route.map(x=>x)); route.length=l;return}
         if (dots[current][dir].elem=="switch"){
             let s=switches[dots[current][dir].number];
+            if (s.booked){route.length=l;return;}
             let side=dots[current][dir].side;
             let suite=s.nextd(side);
             route.push({name: "dot", elem: dots[current], dir: dir});
             for (let i=0;i<suite.length;i++){
                 (s[suite[i]][invDir(dir)].number!=switches.indexOf(s))? dir=invDir(dir):dir=dir;
+                // c'est un peu leger il faut aussi tester le name sinon on a un risuqe section#=switch#
                 current=s[suite[i]].name;
-                route.push({name: "switch", elem: s, dir: side+"->"+suite[i]});
+                let direct=side+"->"+suite[i]
+                
+                route.push({name: "switch", elem: s, dir: direct});
                 findRoutes(current,j);
                 route.pop();
             }
@@ -319,9 +339,81 @@ function allRoutes(i,j){
             return
         }
     }
+    function getFlankProtection(s,orient){
+        let flanks=[];
+        let flank=[];
+        let flankProtected=false
+        let side=`exit${(/1/.test(orient))? 2:1 }`
+        let sectNum=0
+        let dot=s[side];
+        let dir="left";
+        (dot.right.elem=="switch"&&dot.right.number==switches.indexOf(s))? dir="left":dir="right";
+        calculFlank(dot,dir);
+        console.log(flanks);
+        function calculFlank(dot,dir){
+            if (sectNum==2||flankProtected){return;}// flank protection stop with 2 sections
+            if (dot[dir]==null){
+                flank.push(dot);
+                flank.push ("No complete Flank Protection");
+                flanks.push(flank);
+                sectNum+=1;
+                return
+            }
+            if (dot[dir].elem=="section"){
+                let s=sections[dot[dir].number];
+                flank.push(dot);
+                flank.push(s);
+                sectNum+=1;
+                if (sectNum==2){
+                    flanks.push(flank);
+                    return;
+                }
+                (s.left==dot)? dot=s.right: dot=s.left;
+                if (dot.right==null||dot.left==null){
+                    flank.push("no complete Flank protection");
+                    flanks.push(flank)
+                    sectNum+=1;
+                    return;
+                }
+                (dot.right.elem=="section"&&dot.right.number==sections.indexOf(s))? dir="left":dir="right";
+                calculFlank(dot,dir);
+            }
+            if (dot[dir].elem=="switch"){
+                flank.push(dot);
+                s=switches[dot[dir].number]
+                flank.push(s);
+                switch (dot[dir].side){
+                    case "exit1":
+                        s.move ("entry->exit2");
+                        flanks.push(flank);
+                        flankProtected=true
+                        return;
+                    case "exit2":
+                        s.move ("entry->exit1");
+                        flanks.push(flank);
+                        flankProtected=true;
+                        return;
+                    case "entry":
+                        let l=flank.length;
+                        dot=s.exit1;
+                        (dot.right.elem=="switch"&&dot.right.number==switches.indexOf(s))? dir="left":dir="right";
+                        calculFlank(dot,dir);
+                        flank.length=l
+                        dot=s.exit2;
+                        (dot.right.elem=="switch"&&dot.right.number==switches.indexOf(s))? dir="left":dir="right";
+                        calculFlank(dot,dir);
+                        flank.lenght=l
+                        return;
+                    default:
+                        alert("pb avec side dans Flank protection switch")
+                        
+                }
+            }
+        }
+    }
     findRoutes(i,j);
     let l=routes.length;
-    if (l==1){supervisedRoutes.push(routes[0]);draw()}
+    if (l==1){setRoute(routes[0])}
     if (l>1){
         
         for (let i=0;i<l;i++){
@@ -349,10 +441,32 @@ function chooseRoute(x,y,r){
         return;
     }
     let l=r[0].length;
-    supervisedRoutes.push(r[0][Math.floor(x/cW*l)]);
+    setRoute(r[0][Math.floor(x/cW*l)]);
     action=selectElemAndDo;
+    return;
+} 
+function setRoute(route){
+    console.log(route);
+    let l=route.length;
+    let sl=supervisedRoutes.length;
+    supervisedRoutes.push(route);
     draw();
-}   
+    for (let i=0;i<l;i++){
+        switch (route[i].name){
+            case "section":
+                route[i].elem.booked=true;
+                route[i].elem.route=sl;
+                break;
+            case "switch" :
+                route[i].elem.booked=true;
+                route[i].elem.route=sl;
+                route[i].elem.move(route[i].dir,"blue");
+                break
+            default:
+            break
+        }
+    }
+}  
 // je mets les data
 //let dots=[];
 dots[0]=new Dot(20,160); dots[0].name=0; dots[0].left=null;dots[0].right={"elem":"section","number":0,"side":"left"};
