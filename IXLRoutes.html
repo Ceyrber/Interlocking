@@ -1,0 +1,590 @@
+<html>
+<head></head>
+<body>
+    <canvas width="800" height="400" id="draw"></canvas>
+	<div id="print"></div>
+    <script>
+    const canvas=document.getElementById("draw");
+	const cW=canvas.width;
+	const cH=canvas.height;
+    const ctx=canvas.getContext("2d");
+    const instruction=document.getElementById("print");
+    let action=selectElemAndDo;
+    const rg=/exit\d/;
+    ctx.lineWidth=3;
+    //canvas.addEventListener("mousedown", initiateElement,false);
+    canvas.addEventListener("mouseup", selectAction,false);
+    //canvas.addEventListener("mousemove",moveElement,false);
+    const param=[];
+	function selectAction(e){
+        let x=e.pageX-7;
+        let y=e.pageY-7;
+        action(x,y,param);
+    }
+    document.addEventListener('keydown', (event) => {
+		const key = event.key;
+		switch (key){
+		case "p":
+			//drawWhat='switch';
+			break;
+		case "s":
+			action="select";
+			break;
+		default:
+			console.log(key);
+		
+		}
+	}
+	)
+	const arrondi = x=>Math.round(x/10)*10;
+    //let sectionState="none";
+	//let switchState="none";
+    const supervisedRoutes=[];
+    class Dot{
+        constructor(x=0,y=0, name=""){
+            this.x=x;
+            this.y=y;
+			this.left=null;
+			this.right=null;
+			this.name=name;
+        }
+        draw (color='black') {
+            ctx.fillStyle=color;
+            ctx.fillRect(this.x-3,this.y-3,6,6);
+			ctx.font = '10px serif';
+			ctx.textAlign = 'center';
+			ctx.fillText(this.name, this.x, this.y-5);
+        }
+        dist (mx,my){
+            return Math.sqrt((this.x-mx)**2+(this.y-my)**2);
+        }
+    }
+    
+    class Section{
+        constructor(A,B, name=""){
+            this.left=A;
+            this.right=B;
+			this.name=name;
+            this.booked=false
+            this.route=null
+        }
+        draw(color='black'){
+            ctx.beginPath();
+            ctx.lineWidth=3;
+            ctx.strokeStyle=color;
+            ctx.fillStyle=color;
+            ctx.moveTo(this.left.x,this.left.y);
+            ctx.lineTo(this.right.x,this.right.y);
+            ctx.stroke();
+			ctx.font = '10px serif';
+			ctx.textAlign = 'center';
+			ctx.fillText(this.name, (this.left.x+this.right.x)/2, (this.left.y+this.right.y)/2-5);
+        }
+		dist(mx,my){
+            let xa=this.left.x;
+            let xb=this.right.x;
+            let ya=this.left.y;
+            let yb=this.right.y;
+            let lambda=((xb-xa)*(mx-xa)+(yb-ya)*(my-ya))/((xb-xa)**2+(yb-ya)**2);
+            if (lambda<0 || lambda>1) {return 200;}
+            return Math.sqrt((mx-xa)**2+(my-ya)**2-(lambda**2)*((xb-xa)**2+(yb-ya)**2))
+        }
+    }
+	class Switch {
+		constructor (entry, exit1,exit2, name="", dir="LR"){
+			if (entry.x>exit1.x){dir="RL"}
+			this.entry = entry;
+			this.exit1 = exit1;
+			this.name=name;
+			//this.long1=Dot.distance(entry,exit1); // evidemment faux il faudra revoir
+			this.exit2 = exit2 ;
+			//this.long2=Dot.distance(entry,exit2);
+			this.booked=false;
+            this.flankProtect={};
+			this.dir=dir;
+			this.isFlankProtectionOf=null;
+		}
+        direction="entry->exit1";
+        nextd(side){
+            switch (side){
+                case "entry":
+                    return ["exit1","exit2"];
+                case "exit1":
+                    return ["entry"];
+                case "exit2":
+                    return ["entry"];
+                default :
+                    alert ("pb in next");
+            }
+        }
+        move(dir,color){
+            if(rg.exec(dir)[0]==rg.exec(this.direction)[0]){return;}
+            this.direction="move";
+            this.draw("orange");
+            setTimeout(this.moveSimu,2000, dir, color);           
+        }
+        moveSimu=( function (dir,color){// a remplacer par un vrai simu de type worker
+            //console.log(this,dir,color);
+            this.direction="entry->"+rg.exec(dir)[0];
+            this.draw(color)
+        }).bind(this);
+		draw(color='black'){
+			ctx.strokeStyle=color;
+			ctx.lineWidth = 3;
+			ctx.beginPath();
+			ctx.moveTo(this.entry.x,this.entry.y);
+			ctx.lineTo(this.exit1.x,this.exit1.y);
+			ctx.moveTo((this.entry.x+this.exit1.x)/2,(this.entry.y+this.exit1.y)/2);
+			ctx.lineTo(this.exit2.x,this.exit2.y);
+			ctx.stroke();
+			ctx.fillStyle=color;
+			ctx.beginPath();
+				ctx.moveTo(this.entry.x*0.25+this.exit1.x*0.75,this.entry.y*0.25+this.exit1.y*0.75);
+				ctx.lineTo((this.entry.x+this.exit1.x)/2,(this.entry.y+this.exit1.y)/2);
+				ctx.lineTo(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2);
+			ctx.fill();
+            ctx.fillStyle=color;
+			ctx.font = '10px serif';
+			ctx.textAlign = 'center';
+			let o=0;
+			(this.exit2.y>this.exit1.y) ?  o=5:o=-12;
+			ctx.fillText(this.name, (this.entry.x+this.exit1.x)/2, (this.entry.y+this.exit1.y)/2-o);
+			ctx.fillStyle='white';
+			switch (this.direction){
+				case "entry->exit1":
+					ctx.fillRect(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2 -3,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2-3,6,6);
+					break;
+				case "entry->exit2":
+					ctx.fillRect(this.entry.x*0.25+this.exit1.x*0.75-3,this.entry.y*0.25+this.exit1.y*0.75-3,6,6);
+					break
+				case "move":
+					ctx.fillRect(this.entry.x*0.25+this.exit1.x*0.75-3,this.entry.y*0.25+this.exit1.y*0.75-3,6,6);
+					ctx.fillRect(((this.entry.x+this.exit1.x)/2+this.exit2.x)/2-3,((this.entry.y+this.exit1.y)/2+this.exit2.y)/2-3,6,6);
+			}
+        }
+        dist(mx,my){
+            let xM=Math.max(this.entry.x,this.exit1.x,this.exit2.x);
+            let xm=Math.min(this.entry.x,this.exit1.x,this.exit2.x);
+            let yM=Math.max(this.entry.y,this.exit1.y,this.exit2.y);
+            let ym=Math.min(this.entry.y,this.exit1.y,this.exit2.y);
+            if ((mx<xm)||mx>xM){return 300;}
+            if ((my<ym)||my>yM){return 300;}
+            return 10;
+        }
+    }
+    
+    let dots=[];
+    let sections=[];
+	let switches=[];
+	
+    function checkDot(x,y){
+        let l=dots.length;
+		let ind=-1;
+		for(let i=0;i<l;i++){
+			if (((dots[i].x-x)*(dots[i].x-x)+(dots[i].y-y)*(dots[i].y-y))< 4){
+				return dots[i];
+			}
+		}
+		let A= new Dot(x,y);
+		A.name=dots.length;
+		dots.push(A);
+		return dots[l];
+    }
+	
+    function draw(){
+        ctx.beginPath();
+        ctx.clearRect(0,0,cW,cH);
+        // draw grid
+        ctx.strokeStyle="lightblue";
+        ctx.lineWidth=1;
+		ctx.fillStyle="lightblue";
+        for (let i=0;i<=cW;i+=20){
+            if(i%100==0){
+				
+				ctx.fillRect(i-1,0,2,cH);
+			}
+			else{
+				ctx.moveTo(i,0);
+				ctx.lineTo(i,cH);
+			}
+        }
+        for (let i=0;i<=cH;i+=20){
+            if(i%100==0){ctx.fillRect(0,i-1,cW,2);}
+			else{
+				ctx.moveTo(0,i);
+				ctx.lineTo(cW,i);
+			}
+        }
+        ctx.stroke();
+        ctx.strokeStyle="black";
+        //let l=dots.length;
+        let l=dots.length;
+		for(let i=0;i<l;i++){
+			dots[i].draw();
+		}
+		l=sections.length;
+		for(let i=0;i<l;i++){
+			sections[i].draw();
+		}
+		l=switches.length;
+		for(let i=0;i<l;i++){
+			switches[i].draw();
+		}
+        l=supervisedRoutes.length;
+        for (let i=0;i<l;i++){
+            let ll=supervisedRoutes[i].length;
+            for (let j=0;j<ll;j++){
+                supervisedRoutes[i][j].elem.draw('blue');
+            }
+        }
+    }
+    function selectElemAndDo(x,y){
+        let el=selectElem(x,y)
+        console.log("j'ai", el);
+    }
+    function selectElem(x,y){
+        
+        let choix="dot";
+        let ind=400;
+        let l=dots.length;
+        let min=300;
+        for (let i=0;i<l;i++){
+            let d=dots[i].dist(x,y);
+            if (d<min){
+                min=d;
+                ind=i;
+            }
+        }
+        console.log("point le plus pres: ",ind," à dist: ",min );
+        if (min<5){return dots[ind];}
+        choix="section";
+        ind=400;
+        l=sections.length;
+        min=300;
+        for (let i=0;i<l;i++){
+            let d=sections[i].dist(x,y);
+            if (d<min){
+                min=d;
+                ind=i;
+            }
+        }
+        console.log("sections la plus pres: ",ind," à dist: ",min );
+        if (min<8){return sections[ind]}
+        choix="switch";
+        ind=200;
+        l=switches.length;
+        min=300;
+        for (let i=0;i<l;i++){
+            let d=switches[i].dist(x,y);
+            if (d<min){
+                min=d;
+                ind=i;
+            }
+        }
+        console.log("switch le plus pres: ",ind," à dist: ",min );
+        if (min<11){return Sw[ind];}
+        return null;
+    }
+function allRoutes(i,j){
+    let routes=[];
+    let route=[]
+    let dir="";
+    dots[i].x<dots[j].x ? dir="right": dir="left";
+    function invDir(x){
+        switch (x) {
+            case "left":
+                return "right";
+            case "right":
+                return "left";
+            default:
+                alert("connerie gauche droite");
+        }
+    }
+    function findRoutes(i,j){
+        let current=i;
+        let l=route.length;
+        while ((dots[current][dir].elem=="section")&&(current!=j)){
+                let s=sections[dots[current][dir].number];
+                let side=dots[current][dir].side;
+                (side==dir)? dir=invDir(dir):dir=dir;
+                route.push({name: "dot", elem: dots[current], dir: dir});
+                current=s[dir].name;
+                if (s.booked){route.length=l;return;}
+                route.push({name: "section", elem: s, dir: (side=="left" ? " L->R": " R->L")});
+                if (dots[current][dir]==null){route.length=l;return}
+        }
+        if (current===j){
+            route.push({name: "dot", elem: dots[current], dir: dir});
+            routes.push(route.map(x=>x)); route.length=l;return}
+        if (dots[current][dir].elem=="switch"){
+            let s=switches[dots[current][dir].number];
+            if (s.booked){route.length=l;return;}
+            let side=dots[current][dir].side;
+            let suite=s.nextd(side);
+            route.push({name: "dot", elem: dots[current], dir: dir});
+            for (let i=0;i<suite.length;i++){
+                (s[suite[i]][invDir(dir)].number!=switches.indexOf(s))? dir=invDir(dir):dir=dir;
+                // c'est un peu leger il faut aussi tester le name sinon on a un risuqe section#=switch#
+                current=s[suite[i]].name;
+				let direct="";
+                (side=="entry")? direct=side+"->"+suite[i]: direct=suite[i]+"->"+side;
+                
+                route.push({name: "switch", elem: s, dir: direct});
+                findRoutes(current,j);
+                route.pop();
+            }
+            route.length=l;
+            return
+        }
+    }
+	function addFlankProtection(){
+		let l=routes.length;
+		for (let i=0;i<l;i++){
+			let ll=routes[i].length;
+			for (let j=0;j<ll;j++){
+				let s=routes[i][j];
+				if (s.name=="switch"){
+					let fP=s.elem.flankProtect[s.dir];
+					let lll=fP.length;
+					let finalFP=[];
+					for (k=0;k<lll; k++){
+						let llll=fP[k].length;
+						let fPAvailable=true;
+						for (p=0;p<llll;p++){
+							let ss=fP[k][p];
+							
+							switch (ss.elem){
+								case "section":
+									if (sections[ss.index].booked){fPAvailable=false}; break;
+								case "switch":
+									if (switches[ss.index].isFlankProtectionOf==null){
+										if (switches[ss.index].booked) {fPavailable=false;break}
+									}
+									else {
+										 if (ss.orient!=switches[ss.index].direction){fPavailable=false;break;}
+									}
+								default:
+									break;										
+							}
+						}
+						if (fPAvailable){finalFP.push(fP[k])}	
+					}					
+					if (finalFP.length==0){
+						console.log(routes[i]);
+						console.log("has no flank Pr on Switch "+s.elem.name);
+						routes.splice(i,1);
+						break;
+					}
+					else{routes[i][j].flankProtection=finalFP;}
+				}
+			}
+		}
+	}
+    
+    findRoutes(i,j);
+	addFlankProtection();
+    let l=routes.length;
+    if (l==1){setRoute(routes[0])}
+    if (l>1){
+        
+        for (let i=0;i<l;i++){
+            let ll=routes[i].length;
+            ctx.save();
+            ctx.translate(i*cW/l, 300);
+            ctx.scale(1/l,1/4);
+            draw();
+            for (let j=0;j<ll;j++){
+                routes[i][j].elem.draw('red');
+            }
+            ctx.restore()
+        }
+        instruction.innerHTML=`choose one of the ${l} routes`;
+        action=chooseRoute;
+        param[0]=routes;
+    }
+    if (l==0){alert('no available route at this time')}
+    return routes;
+}
+function chooseRoute(x,y,r){
+    if (y<300){
+        alert ('select a route by clicking on it');
+        return;
+    }
+    let l=r[0].length;
+    setRoute(r[0][Math.floor(x/cW*l)]);
+    action=selectElemAndDo;
+    return;
+} 
+function setRoute(route){
+    console.log(route);
+    let l=route.length;
+    let sl=supervisedRoutes.length;
+    supervisedRoutes.push(route);
+    draw();
+    for (let i=0;i<l;i++){
+        switch (route[i].name){
+            case "section":
+                route[i].elem.booked=true;
+                route[i].elem.route=sl;
+                break;
+            case "switch" :
+                route[i].elem.booked=true;
+                route[i].elem.route=sl;
+                route[i].elem.move(route[i].dir,"blue");
+                break
+            default:
+            break
+        }
+    }
+}
+function getFlankProtection(s,orient){
+        let flanks=[];
+        let flank=[];
+        let flankProtected=false
+        let side=`exit${(/1/.test(orient))? 2:1 }`
+        let sectNum=0
+        let dot=s[side];
+        let dir="left";
+        (dot.right.elem=="switch"&&dot.right.number==switches.indexOf(s))? dir="left":dir="right";
+        calculFlank(dot,dir);
+        function calculFlank(dot,dir){
+            if (sectNum==2||flankProtected){return;}// flank protection stop with 2 sections
+            if (dot[dir]==null){
+                flank.push({elem: "dot", index: dot.name});
+                flank.push ({elem: "No complete Flank Protection"});
+                flanks.push(flank.map(x=>x));
+                sectNum+=1;
+                return
+            }
+            if (dot[dir].elem=="section"){
+                let s=sections[dot[dir].number];
+                flank.push({elem: "dot", index: dot.name});
+                flank.push({elem: "section", index: sections.indexOf(s)});
+                sectNum+=1;
+				(s.left==dot)? dot=s.right: dot=s.left;
+                if (sectNum==2){
+					flank.push({elem: "dot", index: dot.name});
+                    flanks.push(flank.map(x=>x));
+                    return;
+                }
+                if (dot.right==null||dot.left==null){
+                    flank.push({elem: "no complete Flank protection"});
+                    flanks.push(flank.map(x=>x))
+                    sectNum+=1;
+                    return;
+                }
+                (dot.right.elem=="section"&&dot.right.number==sections.indexOf(s))? dir="left":dir="right";
+                calculFlank(dot,dir);
+				return;
+            }
+            if (dot[dir].elem=="switch"){
+                flank.push({elem: "dot", index: dot.name});
+                let s=switches[dot[dir].number]
+                
+                switch (dot[dir].side){
+                    case "exit1":
+						flank.push({elem: "switch", index: switches.indexOf(s), orient: "entry->exit2"});
+                        flanks.push(flank.map(x=>x));
+                        flankProtected=true
+                        return;
+                    case "exit2":
+                        flank.push({elem: "switch", index: switches.indexOf(s), orient: "entry->exit1"})
+						flanks.push(flank.map(x=>x));
+                        flankProtected=true;
+                        return;
+                    case "entry":
+                        let l=flank.length;
+						let sn=sectNum;
+                        dot=s.exit1;
+                        (dot.right.elem=="switch"&&dot.right.number==switches.indexOf(s))? dir="left":dir="right";
+						flank.push({elem: "switch", index: switches.indexOf(s), orient: "entry->exit1"})
+                        calculFlank(dot,dir);
+                        flank.length=l
+						sectNum=sn;
+                        dot=s.exit2;
+                        (dot.right.elem=="switch"&&dot.right.number==switches.indexOf(s))? dir="left":dir="right";
+						flank.push({elem: "switch", index: switches.indexOf(s), orient: "entry->exit2"})
+                        calculFlank(dot,dir);
+                        flank.lenght=l
+                        return;
+                    default:
+                        alert("pb avec side dans Flank protection switch")
+                        
+                }
+            }
+        }
+	return flanks
+}
+  
+// je mets les data
+//let dots=[];
+dots[0]=new Dot(20,160); dots[0].name=0; dots[0].left=null;dots[0].right={"elem":"section","number":0,"side":"left"};
+dots[1]=new Dot(80,160); dots[1].name=1; dots[1].left={"elem":"section","number":0,"side":"right"};dots[1].right={"elem":"section","number":1,"side":"left"};
+dots[2]=new Dot(120,160); dots[2].name=2; dots[2].left={"elem":"section","number":1,"side":"right"};dots[2].right={"elem":"switch","number":0,"side":"entry"};
+dots[3]=new Dot(180,160); dots[3].name=3; dots[3].left={"elem":"switch","number":0,"side":"exit1"};dots[3].right={"elem":"section","number":3,"side":"left"};
+dots[4]=new Dot(180,80); dots[4].name=4; dots[4].left={"elem":"switch","number":0,"side":"exit2"};dots[4].right={"elem":"section","number":2,"side":"left"};
+dots[5]=new Dot(240,80); dots[5].name=5; dots[5].left={"elem":"section","number":2,"side":"right"};dots[5].right={"elem":"section","number":14,"side":"left"};
+dots[6]=new Dot(220,160); dots[6].name=6; dots[6].left={"elem":"section","number":3,"side":"right"};dots[6].right={"elem":"switch","number":1,"side":"entry"};
+dots[7]=new Dot(280,160); dots[7].name=7; dots[7].left={"elem":"switch","number":1,"side":"exit1"};dots[7].right={"elem":"section","number":8,"side":"left"};
+dots[8]=new Dot(280,120); dots[8].name=8; dots[8].left={"elem":"switch","number":1,"side":"exit2"};dots[8].right={"elem":"section","number":4,"side":"left"};
+dots[9]=new Dot(320,120); dots[9].name=9; dots[9].left={"elem":"section","number":4,"side":"right"};dots[9].right={"elem":"switch","number":2,"side":"entry"};
+dots[10]=new Dot(380,120); dots[10].name=10; dots[10].left={"elem":"switch","number":2,"side":"exit1"};dots[10].right={"elem":"switch","number":8,"side":"exit1"};
+dots[11]=new Dot(380,100); dots[11].name=11; dots[11].left={"elem":"switch","number":2,"side":"exit2"};dots[11].right={"elem":"switch","number":3,"side":"exit2"};
+dots[12]=new Dot(440,80); dots[12].name=12; dots[12].left={"elem":"switch","number":3,"side":"entry"};dots[12].right={"elem":"section","number":5,"side":"left"};
+dots[13]=new Dot(380,80); dots[13].name=13; dots[13].left={"elem":"section","number":15,"side":"right"};dots[13].right={"elem":"switch","number":3,"side":"exit1"};
+dots[14]=new Dot(500,80); dots[14].name=14; dots[14].left={"elem":"section","number":5,"side":"right"};dots[14].right={"elem":"section","number":6,"side":"left"};
+dots[15]=new Dot(540,80); dots[15].name=15; dots[15].left={"elem":"section","number":6,"side":"right"};dots[15].right={"elem":"section","number":7,"side":"left"};
+dots[16]=new Dot(560,100); dots[16].name=16; dots[16].left={"elem":"section","number":7,"side":"right"};dots[16].right={"elem":"switch","number":4,"side":"exit2"};
+dots[17]=new Dot(620,120); dots[17].name=17; dots[17].left={"elem":"switch","number":4,"side":"entry"};dots[17].right={"elem":"switch","number":5,"side":"entry"};
+dots[18]=new Dot(560,120); dots[18].name=18; dots[18].left={"elem":"section","number":10,"side":"right"};dots[18].right={"elem":"switch","number":4,"side":"exit1"};
+dots[19]=new Dot(660,120); dots[19].name=19; dots[19].left={"elem":"switch","number":5,"side":"exit1"};dots[19].right={"elem":"section","number":16,"side":"left"};
+dots[20]=new Dot(660,140); dots[20].name=20; dots[20].left={"elem":"switch","number":5,"side":"exit2"};dots[20].right={"elem":"switch","number":6,"side":"exit2"};
+dots[21]=new Dot(700,160); dots[21].name=21; dots[21].left={"elem":"switch","number":6,"side":"entry"};dots[21].right={"elem":"section","number":17,"side":"left"};
+dots[22]=new Dot(660,160); dots[22].name=22; dots[22].left={"elem":"section","number":13,"side":"right"};dots[22].right={"elem":"switch","number":6,"side":"exit1"};
+dots[23]=new Dot(340,160); dots[23].name=23; dots[23].left={"elem":"section","number":8,"side":"right"};dots[23].right={"elem":"switch","number":7,"side":"entry"};
+dots[24]=new Dot(380,160); dots[24].name=24; dots[24].left={"elem":"switch","number":7,"side":"exit1"};dots[24].right={"elem":"section","number":11,"side":"left"};
+dots[25]=new Dot(380,140); dots[25].name=25; dots[25].left={"elem":"switch","number":7,"side":"exit2"};dots[25].right={"elem":"switch","number":8,"side":"exit2"};
+dots[26]=new Dot(420,120); dots[26].name=26; dots[26].left={"elem":"switch","number":8,"side":"entry"};dots[26].right={"elem":"section","number":9,"side":"left"};
+dots[27]=new Dot(480,120); dots[27].name=27; dots[27].left={"elem":"section","number":9,"side":"right"};dots[27].right={"elem":"section","number":10,"side":"left"};
+dots[28]=new Dot(460,160); dots[28].name=28; dots[28].left={"elem":"section","number":11,"side":"right"};dots[28].right={"elem":"section","number":12,"side":"left"};
+dots[29]=new Dot(560,160); dots[29].name=29; dots[29].left={"elem":"section","number":12,"side":"right"};dots[29].right={"elem":"section","number":13,"side":"left"};
+dots[30]=new Dot(310,80); dots[30].name=30; dots[30].left={"elem":"section","number":14,"side":"right"};dots[30].right={"elem":"section","number":15,"side":"left"};
+dots[31]=new Dot(720,120); dots[31].name=31; dots[31].left={"elem":"section","number":16,"side":"right"};dots[31].right=null;
+dots[32]=new Dot(760,160); dots[32].name=32; dots[32].left={"elem":"section","number":17,"side":"right"};dots[32].right=null;
+sections[0]= new Section(dots[0], dots[1], "S0"); 
+sections[1]= new Section(dots[1], dots[2], "S1"); 
+sections[2]= new Section(dots[4], dots[5], "S2"); 
+sections[3]= new Section(dots[3], dots[6], "S3"); 
+sections[4]= new Section(dots[8], dots[9], "S4"); 
+sections[5]= new Section(dots[12], dots[14], "S5"); 
+sections[6]= new Section(dots[14], dots[15], "S6"); 
+sections[7]= new Section(dots[15], dots[16], "S7"); 
+sections[8]= new Section(dots[7], dots[23], "S8"); 
+sections[9]= new Section(dots[26], dots[27], "S9"); 
+sections[10]= new Section(dots[27], dots[18], "S10"); 
+sections[11]= new Section(dots[24], dots[28], "S11"); 
+sections[12]= new Section(dots[28], dots[29], "S12"); 
+sections[13]= new Section(dots[29], dots[22], "S13"); 
+sections[14]= new Section(dots[5], dots[30], "S14"); 
+sections[15]= new Section(dots[30], dots[13], "S15"); 
+sections[16]= new Section(dots[19], dots[31], "S16"); 
+sections[17]= new Section(dots[21], dots[32], "S17"); 
+switches[0]= new Switch(dots[2], dots[3], dots[4], "Sw0"); 
+switches[1]= new Switch(dots[6], dots[7], dots[8], "Sw1"); 
+switches[2]= new Switch(dots[9], dots[10], dots[11], "Sw2"); 
+switches[3]= new Switch(dots[12], dots[13], dots[11], "Sw3"); 
+switches[4]= new Switch(dots[17], dots[18], dots[16], "Sw4"); 
+switches[5]= new Switch(dots[17], dots[19], dots[20], "Sw5"); 
+switches[6]= new Switch(dots[21], dots[22], dots[20], "Sw6"); 
+switches[7]= new Switch(dots[23], dots[24], dots[25], "Sw7"); 
+switches[8]= new Switch(dots[26], dots[10], dots[25], "Sw8");
+draw();
+let lll=switches.length;
+console.log("ici");
+for (let i=0;i<lll;i++ ){
+switches[i].flankProtect["entry->exit1"]=getFlankProtection(switches[i], "entry->exit1");
+switches[i].flankProtect["entry->exit2"]=getFlankProtection(switches[i], "entry->exit2");
+}     
+    </script>
+</body>
+</html>
