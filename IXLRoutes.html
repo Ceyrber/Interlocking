@@ -230,13 +230,17 @@
 		for(let i=0;i<l;i++){
 			switches[i].draw();
 		}
-        l=supervisedRoutes.length;
-        for (let i=0;i<l;i++){
-            let ll=supervisedRoutes[i].length;
-            for (let j=0;j<ll;j++){
-                supervisedRoutes[i][j].elem.draw('blue');
+        drawSupervisedRoutes(supervisedRoutes);
+        function drawSupervisedRoutes(sr, flank=false){
+            let l=sr.length;
+            for (let i=0;i<l;i++){
+                let ll=supervisedRoutes[i].length;
+                for (let j=0;j<ll;j++){
+                    supervisedRoutes[i][j].elem.draw('blue');
+                }
             }
         }
+        
     }
     function selectElemAndDo(x,y){
         let el=selectElem(x,y)
@@ -340,7 +344,8 @@ function allRoutes(i,j){
 	function addFlankProtection(){
 		let l=routes.length;
 		for (let i=0;i<l;i++){
-			let ll=routes[i].length;
+            let ll=routes[i].length;
+            let elems=routes[i].map(x=>x.elem);
 			for (let j=0;j<ll;j++){
 				let s=routes[i][j];
 				if (s.name=="switch"){
@@ -351,7 +356,10 @@ function allRoutes(i,j){
 						let llll=fP[k].length;
 						let fPAvailable=true;
 						for (p=0;p<llll;p++){
-							let ss=fP[k][p];
+                            let ss=fP[k][p];
+                            let ev="";
+                            (ss.elem=="switch") ? ev="switches["+ss.index+"]":ev=ss.elem+"s["+ss.index+"]"; 
+                            if (elems.indexOf(eval(ev))>-1){console.log(ev,i);fPAvailable=false;break;}
 							
 							switch (ss.elem){
 								case "section":
@@ -370,12 +378,13 @@ function allRoutes(i,j){
 						if (fPAvailable){finalFP.push(fP[k])}	
 					}					
 					if (finalFP.length==0){
-						console.log(routes[i]);
+                        console.log("route"+i);
+                        console.log(routes[i]);
 						console.log("has no flank Pr on Switch "+s.elem.name);
-						routes.splice(i,1);
+						//routes.splice(i,1);
 						break;
 					}
-					else{routes[i][j].flankProtection=finalFP;}
+					else{routes[i][j].flankProtection=finalFP.map(x=>x);}
 				}
 			}
 		}
@@ -384,7 +393,7 @@ function allRoutes(i,j){
     findRoutes(i,j);
 	addFlankProtection();
     let l=routes.length;
-    if (l==1){setRoute(routes[0])}
+    if (l==1){action=selectFlank; setFlanks(routes[0])}
     if (l>1){
         
         for (let i=0;i<l;i++){
@@ -411,10 +420,56 @@ function chooseRoute(x,y,r){
         return;
     }
     let l=r[0].length;
-    setRoute(r[0][Math.floor(x/cW*l)]);
-    action=selectElemAndDo;
+    action=selectFlank;
+    setFlanks(r[0][Math.floor(x/cW*l)]);
     return;
-} 
+}
+function selectFlank(x,y,r){
+    if (y<300){
+        alert ('select a flank by clicking on it');
+        return;
+    }
+    //let l=r[0].length;
+    //action=selectFlank;
+    //setFlanks(r[0][Math.floor(x/cW*l)]);
+    //return;
+}
+function setFlanks(r){
+    console.log(r);
+    let l=r.length;
+    supervisedRoutes.push(r);
+    for (let i=0;i<l;i++){
+        if (r[i].name=="switch"){
+            let fP=r[i].flankProtection
+            if (fP.length>1){
+                let ll=fP.length;
+                for (let j=0;j<ll;j++){
+                    ctx.save();
+                    ctx.translate(j*cW/ll, 300);
+                    ctx.scale(1/ll,1/4);
+                    draw();
+                    let lll=fP[j].length;
+                    for (let k=0;k<lll;k++){
+                        switch(fP[j][k].elem){
+                            case "dot" :
+                                dots[fP[j][k].index].draw("orange"); break;
+                            case "section" :
+                                sections[fP[j][k].index].draw("orange"); break;
+                            case "switch" :
+                                switches[fP[j][k].index].draw("orange"); break;
+                            default: 
+                                alert ("couille dans le beurre sur setFlank")
+
+                        }
+                    }
+                    ctx.restore()
+                }
+                instruction.innerHTML=`choose one of the ${ll} flanks`;
+                wait(4000);
+            }
+        }
+    }
+}
 function setRoute(route){
     console.log(route);
     let l=route.length;
@@ -503,7 +558,8 @@ function getFlankProtection(s,orient){
 						sectNum=sn;
                         dot=s.exit2;
                         (dot.right.elem=="switch"&&dot.right.number==switches.indexOf(s))? dir="left":dir="right";
-						flank.push({elem: "switch", index: switches.indexOf(s), orient: "entry->exit2"})
+                        flank.push({elem: "switch", index: switches.indexOf(s), orient: "entry->exit2"});
+                        flankProtected=false;
                         calculFlank(dot,dir);
                         flank.lenght=l
                         return;
@@ -584,7 +640,13 @@ console.log("ici");
 for (let i=0;i<lll;i++ ){
 switches[i].flankProtect["entry->exit1"]=getFlankProtection(switches[i], "entry->exit1");
 switches[i].flankProtect["entry->exit2"]=getFlankProtection(switches[i], "entry->exit2");
-}     
+}
+function wait(ms) {
+    var d = new Date();
+    var d2 = null;
+    do { d2 = new Date(); }
+    while(d2-d < ms);
+}
     </script>
 </body>
 </html>
