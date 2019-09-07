@@ -40,6 +40,7 @@
     //let sectionState="none";
 	//let switchState="none";
     const supervisedRoutes=[];
+    const interimRoute=[];
     class Dot{
         constructor(x=0,y=0, name=""){
             this.x=x;
@@ -230,7 +231,8 @@
 		for(let i=0;i<l;i++){
 			switches[i].draw();
 		}
-        drawSupervisedRoutes(supervisedRoutes);
+        if(interimRoute.length==0) { drawSupervisedRoutes(supervisedRoutes);}
+        else {drawSupervisedRoutes(interimRoute);}
         function drawSupervisedRoutes(sr, flank=false){
             let l=sr.length;
             for (let i=0;i<l;i++){
@@ -319,7 +321,10 @@ function allRoutes(i,j){
         }
         if (current===j){
             route.push({name: "dot", elem: dots[current], dir: dir});
-            routes.push(route.map(x=>x)); route.length=l;return}
+            routes.push(route.map(x=>{
+				let y={}; y.name=x.name; y.elem=x.elem; y.dir=x.dir; return y;}));
+			route.length=l;return
+		}
         if (dots[current][dir].elem=="switch"){
             let s=switches[dots[current][dir].number];
             if (s.booked){route.length=l;return;}
@@ -375,7 +380,7 @@ function allRoutes(i,j){
 									break;										
 							}
 						}
-						if (fPAvailable){finalFP.push(fP[k])}	
+						if (fPAvailable){finalFP.push(fP[k]);}	
 					}					
 					if (finalFP.length==0){
                         console.log("route"+i);
@@ -384,91 +389,104 @@ function allRoutes(i,j){
 						//routes.splice(i,1);
 						break;
 					}
-					else{routes[i][j].flankProtection=finalFP.map(x=>x);}
+					else{console.log("route: "+i+"element "+j); console.log(finalFP);routes[i][j].flankProtection=finalFP;}
 				}
 			}
 		}
 	}
-    
-    findRoutes(i,j);
-	addFlankProtection();
-    let l=routes.length;
-    if (l==1){action=selectFlank; setFlanks(routes[0])}
-    if (l>1){
+    async function selectRouteAndFlank(){
+        let l=routes.length;
+        let chosenRandF=[];
+        if (l==0){alert("no route available"); return}
+        if (l==1){chosenRandF=await setFlanks(routes[0]);supervisedRoutes.push(chosenRandF);return}
+        if (l>1){
         
-        for (let i=0;i<l;i++){
-            let ll=routes[i].length;
-            ctx.save();
-            ctx.translate(i*cW/l, 300);
-            ctx.scale(1/l,1/4);
-            draw();
-            for (let j=0;j<ll;j++){
-                routes[i][j].elem.draw('red');
-            }
-            ctx.restore()
-        }
-        instruction.innerHTML=`choose one of the ${l} routes`;
-        action=chooseRoute;
-        param[0]=routes;
-    }
-    if (l==0){alert('no available route at this time')}
-    return routes;
-}
-function chooseRoute(x,y,r){
-    if (y<300){
-        alert ('select a route by clicking on it');
-        return;
-    }
-    let l=r[0].length;
-    action=selectFlank;
-    setFlanks(r[0][Math.floor(x/cW*l)]);
-    return;
-}
-function selectFlank(x,y,r){
-    if (y<300){
-        alert ('select a flank by clicking on it');
-        return;
-    }
-    //let l=r[0].length;
-    //action=selectFlank;
-    //setFlanks(r[0][Math.floor(x/cW*l)]);
-    //return;
-}
-function setFlanks(r){
-    console.log(r);
-    let l=r.length;
-    supervisedRoutes.push(r);
-    for (let i=0;i<l;i++){
-        if (r[i].name=="switch"){
-            let fP=r[i].flankProtection
-            if (fP.length>1){
-                let ll=fP.length;
+            for (let i=0;i<l;i++){
+                let ll=routes[i].length;
+                ctx.save();
+                ctx.translate(i*cW/l, 300);
+                ctx.scale(1/l,1/4);
+                draw();
                 for (let j=0;j<ll;j++){
-                    ctx.save();
-                    ctx.translate(j*cW/ll, 300);
-                    ctx.scale(1/ll,1/4);
-                    draw();
-                    let lll=fP[j].length;
-                    for (let k=0;k<lll;k++){
-                        switch(fP[j][k].elem){
-                            case "dot" :
-                                dots[fP[j][k].index].draw("orange"); break;
-                            case "section" :
-                                sections[fP[j][k].index].draw("orange"); break;
-                            case "switch" :
-                                switches[fP[j][k].index].draw("orange"); break;
-                            default: 
-                                alert ("couille dans le beurre sur setFlank")
-
-                        }
-                    }
-                    ctx.restore()
+                    routes[i][j].elem.draw('red');
                 }
-                instruction.innerHTML=`choose one of the ${ll} flanks`;
-                wait(4000);
+                ctx.restore()
+            }
+            instruction.innerHTML=`choose one of the ${l} routes`;
+            let XY= [-1,-1];
+            
+            while(XY[0]<0 && XY[1]<300){
+                XY= await getXYMouse();
+                if (XY[1]<300){alert ('select a route by clicking on it');}
+                if (XY[0]<0){alert("you have to select and click")}
+            }
+            console.log("XY=",XY);
+            chosenRouteInd=Math.floor(XY[0]/cW*l);
+            chosenRandF= await setFlanks(chosenRouteInd);
+            supervisedRoutes.push(chosenRandF);
+            draw();
+        }    
+
+        
+    }
+    async function setFlanks(r){
+        r=routes[r];
+        console.log(r);
+        let l=r.length;
+        interimRoute.push(r);// il faudra changer car c'est plus que ce que l'on veut voir
+        for (let i=0;i<l;i++){
+            if (r[i].name=="switch"){
+                let fP=r[i].flankProtection.map(x=>x);
+                if (fP.length>1){
+                    let ll=fP.length;
+                    for (let j=0;j<ll;j++){
+                        ctx.save();
+                        ctx.translate(j*cW/ll, 300);
+                        ctx.scale(1/ll,1/4);
+                        draw("flanks"); // definir draw (flanks)
+                        let lll=fP[j].length;
+                        for (let k=0;k<lll;k++){
+                            switch(fP[j][k].elem){
+                                case "dot" :
+                                    dots[fP[j][k].index].draw("orange"); break;
+                                case "section" :
+                                    sections[fP[j][k].index].draw("orange"); break;
+                                case "switch" :
+                                    switches[fP[j][k].index].draw("orange"); break;
+                                default: 
+                                    alert ("couille dans le beurre sur setFlank")
+                            }
+                        }
+                        ctx.restore()
+                    }
+                    instruction.innerHTML=`choose one of the ${ll} flanks`;
+                    let XY= [-1,-1];
+                    while(XY[0]<0 && XY[1]<300){
+                        XY= await getXYMouse();
+                        if (XY[1]<300){alert ('select a flank by clicking on it');}
+                        if (XY[0]<0){alert("you have to select and click")}
+                    }
+                    console.log("XY=",XY);
+                    let c=Math.floor(XY[0]/cW*ll);
+                    console.log ("flank is ", c);
+                    let cFP=fP.splice(c,1);
+                    console.log(cFP);
+                    r[i].flankProtection=cFP;    
+                }
             }
         }
+        console.log(r);
+        console.log ("flank traité");
+        interimRoute.length=0;
+        return r
     }
+    findRoutes(i,j);
+    addFlankProtection();
+    selectRouteAndFlank();
+
+
+
+
 }
 function setRoute(route){
     console.log(route);
@@ -571,6 +589,19 @@ function getFlankProtection(s,orient){
         }
 	return flanks
 }
+async function getXYMouse(){
+	function getXYfromMouse(e){getXYMouse.X=e.pageX-7;getXYMouse.Y=e.pageY-7;console.log("trouvé", getXYMouse.X, getXYMouse.Y)};
+	canvas.addEventListener("click", getXYfromMouse, {capture:true, once:true});
+	getXYMouse.X=-1;getXYMouse.Y=-1;
+	let i=0;
+	while (getXYMouse.X<0 && i<100){
+		await wait(100).then(()=>i+=1);
+	}
+	
+	return [getXYMouse.X,getXYMouse.Y];
+	
+}
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   
 // je mets les data
 //let dots=[];
@@ -640,12 +671,6 @@ console.log("ici");
 for (let i=0;i<lll;i++ ){
 switches[i].flankProtect["entry->exit1"]=getFlankProtection(switches[i], "entry->exit1");
 switches[i].flankProtect["entry->exit2"]=getFlankProtection(switches[i], "entry->exit2");
-}
-function wait(ms) {
-    var d = new Date();
-    var d2 = null;
-    do { d2 = new Date(); }
-    while(d2-d < ms);
 }
     </script>
 </body>
